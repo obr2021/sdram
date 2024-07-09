@@ -29,11 +29,11 @@
 module w9864g6jt_ctrl #(
 
     parameter SDRAM_CLK_FREQ = 50,
-    parameter TRP_NS = 29,
-    parameter TRC_NS = 114,
-    parameter TRCD_NS = 29,
-    parameter TCH_NS = 2,
-    parameter CAS = 3'd2
+    //parameter TRP_NS = 29,
+    //parameter TRC_NS = 114,
+    //parameter TRCD_NS = 29,
+    //parameter TCH_NS = 2,
+    //parameter CAS = 3'd2
 ) (
     input wire clk,
     input wire resetn,

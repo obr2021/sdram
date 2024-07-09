@@ -93,9 +93,12 @@ module w9864g6jt_ctrl #(
   localparam CMD_NOP = 4'b0111;
   localparam CMD_DSEL = 4'b1xxx;
   
-	// -- addr
-	// --   21 20  | 19 18 17 16 15 14 13 12 11 10 09 08 | 07 06 05 04 03 02 01 00 |
-	// --  BS0 BS1 |  ROW (A11-A0)  4096 rows            | COL (A7-A0)  256 cols   |
+// -- addr
+// --         21 20  | 19 18 17 16 15 14 13 12 11 10 09 08 | 07 06 05 04 03 02 01 00 |
+// --        BS0 BS1 |  ROW (A11-A0)  4096 rows            | COL (A7-A0)  256 cols   |
+	
+// --    23 22 | 21 20 19 18 17 16 15 14 13 12 11 10 09 | 08 07 06 05 04 03 02 01 00 |
+// --  BS0 BS1 |           ROW (A12-A0)  8k rows        |    COL (A8-A0)  512 cols   |
 	
   wire [1:0]  bank_s;
   wire [11:0] row_s;

@@ -1,12 +1,12 @@
 /*
  *  w9864g6jt_ctrl - A sdram controller
  *
- *  Copyright (C) 2024  <@.>
+ *  Copyright (C) 2024  Hirosh Dabui <hirosh@dabui.de>
  *
  *  Permission to use, copy, modify, and/or distribute this software for any
  *  purpose with or without fee is hereby granted, provided that the above
  *  copyright notice and this permission notice appear in all copies.
- * 
+ *
  *  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  *  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  *  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -19,26 +19,23 @@
 `default_nettype none `timescale 1ns / 1ps
 
 // ===============================
-// WINBOND W9864G6JT (1M X 4 BANKS X 16) 64MB BIT SDRAM 
 // 1Mx4x16 = 8MByte
 // Row addressing 4k (A0-A11)
 // Bank Switching 4 (BA0, BA1)
 // Column Addressing 256 (A0-A7)
 // ===============================
-
 module w9864g6jt_ctrl #(
-
-    parameter SDRAM_CLK_FREQ = 50,
-    //parameter TRP_NS = 29,
-    //parameter TRC_NS = 114,
-    //parameter TRCD_NS = 29,
-    //parameter TCH_NS = 2,
-    //parameter CAS = 3'd2
+    parameter SDRAM_CLK_FREQ = 64,
+    parameter TRP_NS = 20,
+    parameter TRC_NS = 66,
+    parameter TRCD_NS = 20,
+    parameter TCH_NS = 2,
+    parameter CAS = 3'd2
 ) (
     input wire clk,
     input wire resetn,
 
-    input wire [21:0] addr,
+    input wire [22:0] addr,
     input wire [31:0] din,
     input wire [3:0] wmask,
     input wire valid,
@@ -48,8 +45,8 @@ module w9864g6jt_ctrl #(
     output wire sdram_clk,
     output wire sdram_cke,
     output wire [1:0] sdram_dqm,
-    output wire [11:0] sdram_addr,  //  A0-A11 row address, A0-A7 column address
-    output wire [1:0] sdram_ba,  // bank select A11,A12
+    output wire [11:0] sdram_addr,
+    output wire [1:0] sdram_ba,
     output wire sdram_csn,
     output wire sdram_wen,
     output wire sdram_rasn,
@@ -58,21 +55,15 @@ module w9864g6jt_ctrl #(
 );
 
   localparam ONE_MICROSECOND = SDRAM_CLK_FREQ;
-  localparam WAIT_200US = 10000;//200 * ONE_MICROSECOND;  // 50 * 1/50e6 = 1us => 100 * 1us
-  localparam TRP = 3;//((TRP_NS * ONE_MICROSECOND + 500) / 1000 + 1);
-  localparam TRC = 9;//((TRC_NS * ONE_MICROSECOND + 500) / 1000 + 1);
-  localparam TRCD = 3;//((TRCD_NS * ONE_MICROSECOND + 500) / 1000 + 1);
-  localparam TCH = 1;//((TCH_NS * ONE_MICROSECOND + 500) / 1000 + 1); 
-  
-  initial begin
-    $display("Clk frequence: %d MHz", SDRAM_CLK_FREQ);
-    $display("WAIT_200US: %d cycles", WAIT_200US);
-    $display("TRP: %d cycles", TRP);
-    $display("TRC: %d cycles", TRC);
-    $display("TRCD: %d cycles", TRCD);
-    $display("TCH: %d cycles", TCH);
-    $display("CAS_LATENCY: %d cycles", CAS_LATENCY);
-  end
+  localparam WAIT_100US = 100 * ONE_MICROSECOND;  // 64 * 1/64e6 = 1us => 100 * 1us
+  // command period; PRE to ACT in ns, e.g. 20ns
+  localparam TRP = ((TRP_NS * ONE_MICROSECOND / 1000) + 1);
+  // tRC command period (REF to REF/ACT TO ACT) in ns
+  localparam TRC = ((TRC_NS * ONE_MICROSECOND / 1000) + 1);  //
+  // tRCD active command to read/write command delay; row-col-delay in ns
+  localparam TRCD = ((TRCD_NS * ONE_MICROSECOND / 1000) + 1);
+  // tCH command hold time
+  localparam TCH = ((TCH_NS * ONE_MICROSECOND / 1000) + 1);
 
   localparam BURST_LENGTH = 3'b001;  // 000=1, 001=2, 010=4, 011=8
   localparam ACCESS_TYPE = 1'b0;  // 0=sequential, 1=interleaved
@@ -92,21 +83,17 @@ module w9864g6jt_ctrl #(
   localparam CMD_REF = 4'b0001;  // auto refresh (cke=H), selfrefresh assign cke=L
   localparam CMD_NOP = 4'b0111;
   localparam CMD_DSEL = 4'b1xxx;
-  
-// -- addr
-// --         21 20  | 19 18 17 16 15 14 13 12 11 10 09 08 | 07 06 05 04 03 02 01 00 |
-// --        BS0 BS1 |  ROW (A11-A0)  4096 rows            | COL (A7-A0)  256 cols   |
-	
-// --    23 22 | 21 20 19 18 17 16 15 14 13 12 11 10 09 | 08 07 06 05 04 03 02 01 00 |
-// --  BS0 BS1 |           ROW (A12-A0)  8k rows        |    COL (A8-A0)  512 cols   |
-	
-  wire [1:0]  bank_s;
-  wire [11:0] row_s;
-  wire [7:0]  col_s;
-  assign bank_s = addr[21:20];
-  assign row_s  = addr[19:8];
-  assign col_s  = addr[7:0];
-  
+
+  initial begin
+    $display("Clk frequence: %d MHz", SDRAM_CLK_FREQ);
+    $display("WAIT_100US: %d cycles", WAIT_100US);
+    $display("TRP: %d cycles", TRP);
+    $display("TRC: %d cycles", TRC);
+    $display("TRCD: %d cycles", TRCD);
+    $display("TCH: %d cycles", TCH);
+    $display("CAS_LATENCY: %d cycles", CAS_LATENCY);
+  end
+
   reg [3:0] command;
   reg [3:0] command_nxt;
   reg cke;
@@ -148,7 +135,7 @@ module w9864g6jt_ctrl #(
   reg [STATE_WIDTH -1:0] state_nxt;
   reg [STATE_WIDTH -1:0] ret_state;
   reg [STATE_WIDTH -1:0] ret_state_nxt;
-  localparam WAIT_STATE_WIDTH = $clog2(WAIT_200US);
+  localparam WAIT_STATE_WIDTH = $clog2(WAIT_100US);
   reg [WAIT_STATE_WIDTH -1:0] wait_states;
   reg [WAIT_STATE_WIDTH -1:0] wait_states_nxt;
 
@@ -159,13 +146,12 @@ module w9864g6jt_ctrl #(
   reg update_ready;
   reg update_ready_nxt;
 
-  reg oe;
   reg [15:0] dq;
   reg [15:0] dq_nxt;
+  reg oe;
+  reg oe_nxt;
   assign sdram_dq = oe ? dq : 16'hz;
 
-
-  reg oe_nxt;
 
   always @(posedge clk) begin
     if (~resetn) begin
@@ -198,6 +184,11 @@ module w9864g6jt_ctrl #(
     end
   end
 
+  wire [11:0]  select_col  = {4'b0100, addr[8:2], 1'b0};
+  wire [11:0]  select_row  = addr[22:11];
+  wire [1:0]   select_bank = addr[10:9];
+
+
   always @(*) begin
     wait_states_nxt  = wait_states;
     state_nxt        = state;
@@ -217,7 +208,7 @@ module w9864g6jt_ctrl #(
     case (state)
       RESET: begin
         cke_nxt         = 1'b0;
-        wait_states_nxt = WAIT_200US;
+        wait_states_nxt = WAIT_100US;
         ret_state_nxt   = ASSERT_CKE;
         state_nxt       = WAIT_STATE;
       end
@@ -247,7 +238,7 @@ module w9864g6jt_ctrl #(
 
       INIT_SEQ_AUTO_REFRESH1: begin
         command_nxt = CMD_REF;
-        wait_states_nxt = TRC; 
+        wait_states_nxt = TRC;
         ret_state_nxt = INIT_SEQ_LOAD_MODE;
         state_nxt = WAIT_STATE;
       end
@@ -266,8 +257,8 @@ module w9864g6jt_ctrl #(
         ready_nxt = 1'b0;
         if (valid && !ready) begin
           command_nxt     = CMD_ACT;
-          ba_nxt          = bank_s;
-          saddr_nxt       = row_s;
+          ba_nxt          = select_bank;
+          saddr_nxt       = select_row;
           wait_states_nxt = TRCD;
           ret_state_nxt   = |wmask ? COL_WRITEL : COL_READ;
           update_ready_nxt = 1'b1;
@@ -277,7 +268,7 @@ module w9864g6jt_ctrl #(
           command_nxt = CMD_REF;
           saddr_nxt = 0;
           ba_nxt = 0;
-          wait_states_nxt = TRC;//3;  //TRC;
+          wait_states_nxt = 3;  //TRC;
           ret_state_nxt = IDLE;
           update_ready_nxt = 1'b0;
           state_nxt = WAIT_STATE;
@@ -287,8 +278,8 @@ module w9864g6jt_ctrl #(
       COL_READ: begin
         command_nxt     = CMD_READ;
         dqm_nxt         = 2'b00;
-        saddr_nxt       = {3'b100, col_s}; // autoprecharge and column
-        ba_nxt          = bank_s;
+        ba_nxt          = select_bank;
+        saddr_nxt       = select_col;
         wait_states_nxt = CAS_LATENCY;
         ret_state_nxt   = COL_READL;
         state_nxt       = WAIT_STATE;
@@ -315,20 +306,18 @@ module w9864g6jt_ctrl #(
       COL_WRITEL: begin
         command_nxt = CMD_WRITE;
         dqm_nxt     = ~wmask[1:0];
-        saddr_nxt   = {3'b100, col_s}; // autoprecharge and column
-        ba_nxt      = bank_s;
+        ba_nxt      = select_bank;
+        saddr_nxt   = select_col;
         dq_nxt      = din[15:0];
         oe_nxt      = 1'b1;
-        //wait_states_nxt = TRP;
-        //ret_state_nxt   = COL_WRITEH;
         state_nxt   = COL_WRITEH;
       end
 
       COL_WRITEH: begin
         command_nxt      = CMD_NOP;
         dqm_nxt          = ~wmask[3:2];
-        saddr_nxt        = {3'b100, col_s}; // autoprecharge and column
-        ba_nxt           = bank_s;
+        ba_nxt           = select_bank;
+        saddr_nxt        = select_col;
         dq_nxt           = din[31:16];
         oe_nxt           = 1'b1;
         wait_states_nxt  = TRP;
